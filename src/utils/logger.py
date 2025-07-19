@@ -331,7 +331,7 @@ class DatabaseLogger:
         """
         entry = {
             "timestamp": time.time(),
-            "user": getuser.getuser(),
+            "user": getpass.getuser(),
             "database": database,
             "query": query,
             "params": params,

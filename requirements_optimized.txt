@@ -1,0 +1,44 @@
+# Análise GD v2.0.0 - Dependências Otimizadas
+# Versão com bibliotecas desnecessárias removidas
+
+# ===== DEPENDÊNCIAS ESSENCIAIS =====
+
+# Interface gráfica (OBRIGATÓRIO)
+PyQt5>=5.15.0
+
+# Análise de dados (OBRIGATÓRIO para métricas)
+pandas>=1.5.0
+pyarrow>=10.0.0  # Para arquivos Parquet de performance
+
+# Banco de dados (OBRIGATÓRIO para Oracle e HANA)
+oracledb>=1.4.0
+hdbcli>=2.16.0
+
+# Sistema e monitoramento (OBRIGATÓRIO para performance)
+psutil>=5.9.0
+
+# Automação web (OBRIGATÓRIO para downloads)
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+requests>=2.28.0
+
+# ===== DEPENDÊNCIAS REMOVIDAS =====
+# PyQt5-tools - Não necessário em produção
+# numpy - Não usado diretamente no código
+# watchdog - Não implementado
+# python-dotenv - Não usado (configurações via JSON)
+# colorama - Não usado
+# tqdm - Não usado
+# pytest, black, flake8 - Apenas para desenvolvimento
+# sphinx - Apenas para documentação
+
+# ===== DEPENDÊNCIAS OPCIONAIS =====
+# Descomente apenas se necessário:
+
+# Para desenvolvimento:
+# pytest>=7.0.0
+# pytest-qt>=4.2.0
+
+# Para formatação de código:
+# black>=22.0.0
+# flake8>=5.0.0

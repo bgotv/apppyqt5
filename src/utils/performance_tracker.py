@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, asdict
 from contextlib import contextmanager
 import pandas as pd
-from collections import defaultdict, deque
+from collections import defaultdict
 import psutil
 
 from src.config.settings import AppSettings, PerformanceSettings
