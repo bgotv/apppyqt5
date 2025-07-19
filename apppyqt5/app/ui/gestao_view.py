@@ -5,10 +5,10 @@ Este código deve ser integrado à classe MainWindow no arquivo main_window.py.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QTableWidget, 
     QTableWidgetItem, QHeaderView, QSplitter, QFrame, QComboBox, QPushButton,
-    QDateEdit, QGroupBox
+    QDateEdit, QGroupBox, QProgressBar, QGridLayout, QSpacerItem, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QDate, pyqtSlot
-from PyQt5.QtGui import QColor, QBrush, QPainter, QPen, QFont
+from PyQt5.QtGui import QColor, QBrush, QPainter, QPen, QFont, QPixmap, QIcon
 from PyQt5.QtChart import QChart, QChartView, QPieSeries, QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis
 
 import pandas as pd
@@ -32,203 +32,294 @@ class GestaoView(QWidget):
         """
         
         super().__init__(parent)
-       # vai guardar o dataset real que chegará do MainWindow
+        # vai guardar o dataset real que chegará do MainWindow
         self._all_notes = []    # guardará todo o dataset
         self.notes_data = []    # guardará apenas o filtrado
         # inicializa a interface
         self._init_ui()
-        
-
-
         
     def _init_ui(self):
         """Inicializa os componentes da interface."""
         # Layout principal
         main_layout = QVBoxLayout(self)
         
-        # Título
-        title_label = QLabel("Painel de Gestão")
-        title_label.setFont(QFont("Arial", 14, QFont.Bold))
-        main_layout.addWidget(title_label)
+        # Título com indicadores de status
+        header_layout = QHBoxLayout()
         
-        # Controles de filtro
-        filtro_frame = QFrame()
-        filtro_layout = QHBoxLayout(filtro_frame)
+        title_label = QLabel("📊 Painel de Gestão")
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                padding: 10px;
+            }
+        """)
+        header_layout.addWidget(title_label)
         
-        # Filtro de período
-        filtro_layout.addWidget(QLabel("Período:"))
+        # Indicadores rápidos
+        self.total_label = QLabel("📋 Total: 0")
+        self.pendentes_label = QLabel("⏳ Pendentes: 0")
+        self.atrasadas_label = QLabel("🚨 Atrasadas: 0")
+        
+        for label in [self.total_label, self.pendentes_label, self.atrasadas_label]:
+            label.setStyleSheet("""
+                QLabel {
+                    background-color: #ecf0f1;
+                    border: 1px solid #bdc3c7;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+            header_layout.addWidget(label)
+        
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
+        
+        # Seção de filtros
+        filtros_group = QGroupBox("🔍 Filtros")
+        filtros_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                margin: 5px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        filtros_layout = QHBoxLayout(filtros_group)
+        
+        # Data início
+        filtros_layout.addWidget(QLabel("📅 De:"))
         self.data_inicio = QDateEdit()
-        self.data_inicio.setDate(QDate.currentDate().addMonths(-1))
+        self.data_inicio.setDate(QDate.currentDate().addDays(-30))
         self.data_inicio.setCalendarPopup(True)
-        filtro_layout.addWidget(self.data_inicio)
+        filtros_layout.addWidget(self.data_inicio)
         
-        filtro_layout.addWidget(QLabel("até"))
+        # Data fim
+        filtros_layout.addWidget(QLabel("📅 Até:"))
         self.data_fim = QDateEdit()
         self.data_fim.setDate(QDate.currentDate())
         self.data_fim.setCalendarPopup(True)
-        filtro_layout.addWidget(self.data_fim)
+        filtros_layout.addWidget(self.data_fim)
         
-        # Filtro de área
-        filtro_layout.addWidget(QLabel("Área:"))
+        # Área
+        filtros_layout.addWidget(QLabel("🏢 Área:"))
         self.area_combobox = QComboBox()
-        self.area_combobox.addItems(["Todas", "GA", "O&M"])
-        filtro_layout.addWidget(self.area_combobox)
+        self.area_combobox.addItems(["Todas", "Área 1", "Área 2", "Área 3"])
+        filtros_layout.addWidget(self.area_combobox)
         
         # Botão de atualizar
-        self.btn_atualizar = QPushButton("Atualizar")
+        self.btn_atualizar = QPushButton("🔄 Atualizar Dados")
+        self.btn_atualizar.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #21618c;
+            }
+        """)
         self.btn_atualizar.clicked.connect(self._atualizar_dados)
-        filtro_layout.addWidget(self.btn_atualizar)
+        filtros_layout.addWidget(self.btn_atualizar)
         
-        filtro_layout.addStretch()
-        main_layout.addWidget(filtro_frame)
+        filtros_layout.addStretch()
+        main_layout.addWidget(filtros_group)
         
-        # Splitter para dividir a tela
-        splitter = QSplitter(Qt.Vertical)
-        main_layout.addWidget(splitter, 1)
+        # Splitter para dividir gráficos e tabelas
+        splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(splitter, stretch=1)
         
-        # Painel superior - Gráficos
+        # Painel esquerdo - Gráficos
         graficos_widget = QWidget()
-        graficos_layout = QHBoxLayout(graficos_widget)
+        graficos_layout = QVBoxLayout(graficos_widget)
         
-        # Gráfico de pizza - Atividades por status
+        # Gráfico de pizza
+        graficos_layout.addWidget(QLabel("📊 Distribuição por Status"))
         self.pie_chart_view = self._criar_grafico_pizza()
-        graficos_layout.addWidget(self.pie_chart_view)
+        graficos_layout.addWidget(self.pie_chart_view, stretch=1)
         
-        # Gráfico de barras - Atividades por área
+        # Gráfico de barras
+        graficos_layout.addWidget(QLabel("📈 Atividades por Área"))
         self.bar_chart_view = self._criar_grafico_barras()
-        graficos_layout.addWidget(self.bar_chart_view)
+        graficos_layout.addWidget(self.bar_chart_view, stretch=1)
         
         splitter.addWidget(graficos_widget)
         
-        # Painel inferior - Tabelas
+        # Painel direito - Tabelas
         tabelas_widget = QTabWidget()
+        tabelas_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #bdc3c7;
+                border-radius: 5px;
+            }
+            QTabBar::tab {
+                background-color: #ecf0f1;
+                padding: 8px 12px;
+                margin-right: 2px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            }
+            QTabBar::tab:selected {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
         
         # Tab de resumo por status
         self.tab_resumo_status = QWidget()
         self._init_tab_resumo_status()
-        tabelas_widget.addTab(self.tab_resumo_status, "Resumo por Status")
+        tabelas_widget.addTab(self.tab_resumo_status, "📊 Status")
         
         # Tab de resumo por área
         self.tab_resumo_area = QWidget()
         self._init_tab_resumo_area()
-        tabelas_widget.addTab(self.tab_resumo_area, "Resumo por Área")
+        tabelas_widget.addTab(self.tab_resumo_area, "🏢 Áreas")
         
         # Tab de produtividade
         self.tab_produtividade = QWidget()
         self._init_tab_produtividade()
-        tabelas_widget.addTab(self.tab_produtividade, "Produtividade")
+        tabelas_widget.addTab(self.tab_produtividade, "👥 Produtividade")
         
         splitter.addWidget(tabelas_widget)
         
-        # Define proporções iniciais do splitter
-        splitter.setSizes([400, 400])
+        # Define proporções do splitter
+        splitter.setSizes([400, 600])
+        
+        # Conecta eventos dos filtros
+        self.data_inicio.dateChanged.connect(self._atualizar_dados)
+        self.data_fim.dateChanged.connect(self._atualizar_dados)
+        self.area_combobox.currentTextChanged.connect(self._atualizar_dados)
         
     def set_notes_data(self, notes):
         """Recebe o dataset real e força atualização."""
         self._all_notes = notes or []
-        self._atualizar_visualizacoes()
+        self._atualizar_dados()  # Unifica em um só método
         
-    def _atualizar_visualizacoes(self):
-        # 1) conta por status, mas usando a data correta!
-        # supondo que status_calculator espere a data de PRAZO:
-        status_counts = {}
+    def _atualizar_indicadores_rapidos(self):
+        """Atualiza os indicadores rápidos no topo da tela."""
+        total = len(self.notes_data)
+        
+        # Conta pendentes e atrasadas
+        pendentes = 0
+        atrasadas = 0
+        
         for note in self.notes_data:
-            status = calcular_status(note.get("DT_PRAZO","")) or "Aguardando Análise"
-            status_counts[status] = status_counts.get(status, 0) + 1
-
-        # 2) conta por área
-        area_counts = {}
-        for note in self.notes_data:
-            area = note.get("PROJ_RESP","Desconhecido")
-            area_counts[area] = area_counts.get(area, 0) + 1
-
-        # --- 3) produtividade_data por usuário ---
-        from datetime import datetime
-        user_stats = {}
-        for note in self.notes_data:
-            user = note.get("USER_NAME") or note.get("CD_USUARIO_EXTERNO") or "Desconhecido"
-            if user not in user_stats:
-                user_stats[user] = {"concluidas": 0, "total_time_days": 0, "em_andamento": 0}
-
-            cad_str = note.get("DT_CADASTRO")
-            try:
-                cad_dt = datetime.strptime(cad_str, "%d-%m-%y")
-            except:
-                cad_dt = None
-
-            pr = note.get("DT_PARECER")
-            # converte string em datetime, se necessário
-            if isinstance(pr, str):
-                try:
-                    pr = datetime.strptime(pr, "%d-%m-%y")
-                except:
-                    pr = None
-
-            if pr and cad_dt:
-                user_stats[user]["concluidas"]     += 1
-                dias = max((pr - cad_dt).days, 0)
-                user_stats[user]["total_time_days"] += dias
-            else:
-                user_stats[user]["em_andamento"]   += 1
-
-        produtividade_data = []
-        for user, st in user_stats.items():
-            c  = st["concluidas"]
-            e  = st["em_andamento"]
-            tm = (st["total_time_days"] / c) if c>0 else 0
-            ef = (c / (c+e)) if (c+e)>0 else 0
-            produtividade_data.append({
-                "usuario":       user,
-                "concluidas":    c,
-                "tempo_medio":   round(tm,1),
-                "em_andamento":  e,
-                "eficiencia":    round(ef,2)
-            })
-
-        # --- 4) desenha tudo:
-        self._atualizar_grafico_pizza(status_counts)
-        self._atualizar_grafico_barras(area_counts)
-        self._atualizar_tabela_status(status_counts)
-        self._atualizar_tabela_area(area_counts)
-        # **agora sim**:
-        self._atualizar_tabela_produtividade(produtividade_data)
+            status = calcular_status(note.get("DT_CADASTRO", "")) or "Aguardando Análise"
+            if "D7+" in status or "Atrasada" in status:
+                atrasadas += 1
+            elif not note.get("DT_PARECER"):
+                pendentes += 1
+        
+        # Atualiza labels com cores
+        self.total_label.setText(f"📋 Total: {total}")
+        
+        self.pendentes_label.setText(f"⏳ Pendentes: {pendentes}")
+        if pendentes > total * 0.7:  # Mais de 70% pendentes
+            self.pendentes_label.setStyleSheet("""
+                QLabel {
+                    background-color: #f39c12;
+                    color: white;
+                    border: 1px solid #e67e22;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.pendentes_label.setStyleSheet("""
+                QLabel {
+                    background-color: #ecf0f1;
+                    border: 1px solid #bdc3c7;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+        
+        self.atrasadas_label.setText(f"🚨 Atrasadas: {atrasadas}")
+        if atrasadas > 0:
+            self.atrasadas_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e74c3c;
+                    color: white;
+                    border: 1px solid #c0392b;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.atrasadas_label.setStyleSheet("""
+                QLabel {
+                    background-color: #27ae60;
+                    color: white;
+                    border: 1px solid #229954;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
 
     @pyqtSlot()
     def _atualizar_dados(self):
-        """Agrega self.notes_data e atualiza gráficos/tabelas."""
-        
-                # filtra por período
+        """Método único para atualizar todos os dados e visualizações."""
+        # Filtra por período
         inicio = self.data_inicio.date().toPyDate()
-        fim    = self.data_fim.date().toPyDate()
+        fim = self.data_fim.date().toPyDate()
         area_sel = self.area_combobox.currentText()
         
+        # Aplica filtros SEM duplicar dados
         filtered = []
         for n in self._all_notes:
             # converte DT_CADASTRO
             try:
-                d = datetime.strptime(n.get("DT_CADASTRO",""), "%d-%m-%y").date()
+                d = datetime.strptime(n.get("DT_CADASTRO", ""), "%d-%m-%y").date()
             except:
                 continue
             if not (inicio <= d <= fim):
                 continue
-            if area_sel != "Todas" and n.get("PROJ_RESP","") != area_sel:
+            if area_sel != "Todas" and n.get("PROJ_RESP", "") != area_sel:
                 continue
             filtered.append(n)
         
+        # CORREÇÃO: Define notes_data uma única vez
         self.notes_data = filtered
-        # 1) status_data
+        
+        # Atualiza indicadores rápidos
+        self._atualizar_indicadores_rapidos()
+        
+        # 1) Conta por status
         status_counts = {}
         for note in self.notes_data:
-            st = calcular_status(note.get("DT_CADASTRO","")) or "Aguardando Análise"
+            st = calcular_status(note.get("DT_CADASTRO", "")) or "Aguardando Análise"
             status_counts[st] = status_counts.get(st, 0) + 1
 
-        # 2) area_data
+        # 2) Conta por área
         area_counts = {}
         for note in self.notes_data:
-            area = note.get("PROJ_RESP","Desconhecido")
+            area = note.get("PROJ_RESP", "Desconhecido")
             area_counts[area] = area_counts.get(area, 0) + 1
 
-        # 3) produtividade_data por usuário
+        # 3) Calcula produtividade por usuário
         user_stats = {}
         for note in self.notes_data:
             user = note.get("USER_NAME") or note.get("CD_USUARIO_EXTERNO") or "Desconhecido"
@@ -267,23 +358,23 @@ class GestaoView(QWidget):
         for user, stats in user_stats.items():
             c = stats["concluidas"]
             e = stats["em_andamento"]
-            tm = (stats["total_time_days"] / c) if c>0 else 0
-            ef = (c / (c+e)) if (c+e)>0 else 0
+            tm = (stats["total_time_days"] / c) if c > 0 else 0
+            ef = (c / (c + e)) if (c + e) > 0 else 0
             produtividade_data.append({
                 "usuario": user,
                 "concluidas": c,
-                "tempo_medio": round(tm,1),
+                "tempo_medio": round(tm, 1),
                 "em_andamento": e,
-                "eficiencia": round(ef,2)
+                "eficiencia": round(ef, 2)
             })
 
-        # 4) Chama os métodos de plotagem/atualização de tabela
+        # 4) Atualiza todas as visualizações
         self._atualizar_grafico_pizza(status_counts)
         self._atualizar_grafico_barras(area_counts)
         self._atualizar_tabela_status(status_counts)
         self._atualizar_tabela_area(area_counts)
         self._atualizar_tabela_produtividade(produtividade_data)
-    
+
     def _init_tab_resumo_status(self):
         """Inicializa a tab de resumo por status."""
         layout = QVBoxLayout(self.tab_resumo_status)

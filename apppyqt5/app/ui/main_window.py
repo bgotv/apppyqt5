@@ -14,7 +14,7 @@ import os, sqlite3, json, shutil
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout,
     QHBoxLayout, QLabel, QPushButton, QMessageBox, QStatusBar,
-    QSplitter, QTreeWidget, QTreeWidgetItem, QHeaderView, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox
+    QSplitter, QTreeWidget, QTreeWidgetItem, QHeaderView, QComboBox, QGroupBox
 
 )
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
@@ -515,49 +515,168 @@ class MainWindow(QMainWindow):
     def _init_tab_metricas(self):
         """Inicializa a aba de Métricas com filtro por mês, JSON e gráficos."""
         layout = QVBoxLayout(self.tab_metricas)
+        
+        # Título da aba
+        title_layout = QHBoxLayout()
+        title_label = QLabel("📈 Análise de Performance")
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                padding: 10px;
+            }
+        """)
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        layout.addLayout(title_layout)
 
-        # 1) Linha de filtro de mês
-        filtro_layout = QHBoxLayout()
-        filtro_layout.addWidget(QLabel("Mês:"))
+        # Painel de controles
+        controls_group = QGroupBox("🎛️ Controles")
+        controls_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #e74c3c;
+                border-radius: 5px;
+                margin: 5px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        controls_layout = QHBoxLayout(controls_group)
+        
+        # Filtro de mês
+        controls_layout.addWidget(QLabel("📅 Mês:"))
         self.cmb_mes = QComboBox()
+        self.cmb_mes.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #bdc3c7;
+                border-radius: 3px;
+                min-width: 120px;
+            }
+        """)
+        
         # Popule com os meses a partir dos arquivos Parquet
         pasta = r"\\pfl-cps-file\Divisao_GD\Data\data\performance"
         meses = []
-        for fn in os.listdir(pasta):
-            if fn.startswith("stages_") and fn.endswith(".parquet"):
-                # espera formato stages_YYYY_MM.parquet
-                partes = fn.replace(".parquet","").split("_")
-                if len(partes)==3:
-                    meses.append(f"{partes[1]}-{partes[2]}")
+        try:
+            for fn in os.listdir(pasta):
+                if fn.startswith("stages_") and fn.endswith(".parquet"):
+                    # espera formato stages_YYYY_MM.parquet
+                    partes = fn.replace(".parquet","").split("_")
+                    if len(partes)==3:
+                        meses.append(f"{partes[1]}-{partes[2]}")
+        except:
+            # Se não conseguir acessar a pasta, adiciona mês atual
+            from datetime import datetime
+            mes_atual = datetime.now().strftime("%Y-%m")
+            meses = [mes_atual]
+            
         meses = sorted(set(meses))
         self.cmb_mes.addItems(meses)
         self.cmb_mes.currentTextChanged.connect(self._refresh_metrics)
-        filtro_layout.addWidget(self.cmb_mes)
-        layout.addLayout(filtro_layout)
+        controls_layout.addWidget(self.cmb_mes)
 
-        # 2) Botão de refresh manual
-        btn_refresh = QPushButton("Atualizar Métricas")
+        # Botão de refresh manual
+        btn_refresh = QPushButton("🔄 Atualizar Métricas")
+        btn_refresh.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+            QPushButton:pressed {
+                background-color: #a93226;
+            }
+        """)
         btn_refresh.clicked.connect(self._refresh_metrics)
-        layout.addWidget(btn_refresh)
+        controls_layout.addWidget(btn_refresh)
+        
+        # Indicadores de performance
+        self.perf_total_label = QLabel("📊 Total Registros: 0")
+        self.perf_media_label = QLabel("⏱️ Tempo Médio: 0s")
+        self.perf_usuarios_label = QLabel("👥 Usuários Ativos: 0")
+        
+        for label in [self.perf_total_label, self.perf_media_label, self.perf_usuarios_label]:
+            label.setStyleSheet("""
+                QLabel {
+                    background-color: #ecf0f1;
+                    border: 1px solid #bdc3c7;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+            controls_layout.addWidget(label)
+        
+        controls_layout.addStretch()
+        layout.addWidget(controls_group)
 
-        # 3) Árvore JSON (opcionalmente pode ser removida)
+        # Splitter para dividir métricas detalhadas e gráficos
+        splitter = QSplitter(Qt.Horizontal)
+        layout.addWidget(splitter, stretch=1)
+
+        # Painel esquerdo - Métricas detalhadas
+        metrics_widget = QWidget()
+        metrics_layout = QVBoxLayout(metrics_widget)
+        
+        metrics_layout.addWidget(QLabel("📋 Métricas Detalhadas"))
         self.metrics_tree = QTreeWidget()
-        self.metrics_tree.setHeaderLabels(["Chave", "Valor"])
+        self.metrics_tree.setHeaderLabels(["Métrica", "Valor", "Detalhes"])
         self.metrics_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.metrics_tree.header().setStretchLastSection(True)
-        layout.addWidget(self.metrics_tree, stretch=1)
+        self.metrics_tree.setStyleSheet("""
+            QTreeWidget {
+                border: 1px solid #bdc3c7;
+                border-radius: 5px;
+                background-color: white;
+            }
+            QTreeWidget::item {
+                padding: 5px;
+            }
+            QTreeWidget::item:selected {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
+        metrics_layout.addWidget(self.metrics_tree)
+        
+        splitter.addWidget(metrics_widget)
 
-        # 4) Canvas para gráfico 1 (média etapa_analise por usuário)
-        self.fig_user = Figure(figsize=(4, 3))
+        # Painel direito - Gráficos
+        charts_widget = QWidget()
+        charts_layout = QVBoxLayout(charts_widget)
+
+        # Gráfico 1 - Performance por usuário
+        charts_layout.addWidget(QLabel("👤 Performance por Usuário"))
+        self.fig_user = Figure(figsize=(6, 4))
         self.canvas_user = FigureCanvas(self.fig_user)
         self.canvas_user.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.canvas_user, stretch=1)
+        charts_layout.addWidget(self.canvas_user, stretch=1)
 
-        # 5) Canvas para gráfico 2 (média question_* por pergunta)
-        self.fig_q = Figure(figsize=(4, 3))
+        # Gráfico 2 - Performance por pergunta
+        charts_layout.addWidget(QLabel("❓ Performance por Pergunta"))
+        self.fig_q = Figure(figsize=(6, 4))
         self.canvas_q = FigureCanvas(self.fig_q)
         self.canvas_q.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.canvas_q, stretch=1)
+        charts_layout.addWidget(self.canvas_q, stretch=1)
+        
+        splitter.addWidget(charts_widget)
+        
+        # Define proporções do splitter
+        splitter.setSizes([300, 500])
 
         self.tab_metricas.setLayout(layout)
 
@@ -587,44 +706,199 @@ class MainWindow(QMainWindow):
         ano, mm = mes.split("-")
         path = rf"\\pfl-cps-file\Divisao_GD\Data\data\performance\stages_{ano}_{mm}.parquet"
 
-        # 1) Leitura do Parquet
+        # 1) Leitura do Parquet com tratamento de erro melhorado
         try:
             df = pd.read_parquet(path)
+        except FileNotFoundError:
+            QMessageBox.warning(self, "Arquivo não encontrado", 
+                              f"Arquivo de performance não encontrado para {mes}")
+            # Limpa visualizações
+            self._clear_metrics_displays()
+            return
         except Exception as e:
-            QMessageBox.warning(self, "Erro ao ler Parquet", str(e))
+            QMessageBox.warning(self, "Erro ao ler dados", 
+                              f"Erro ao carregar dados de performance:\n{str(e)}")
+            self._clear_metrics_displays()
             return
 
-        # 2) Opcional: popular árvore JSON com estatísticas resumidas
-        #    aqui mostramos só contagem de registros por stage
-        resumo = df.groupby("stage").size().to_dict()
-        self.metrics_tree.clear()
-        for stage, cnt in resumo.items():
-            QTreeWidgetItem(self.metrics_tree, [stage, str(cnt)])
+        # 2) Atualiza indicadores rápidos
+        total_registros = len(df)
+        tempo_medio = df['duration_s'].mean() if 'duration_s' in df.columns else 0
+        usuarios_unicos = df['user'].nunique() if 'user' in df.columns else 0
+        
+        self.perf_total_label.setText(f"📊 Total Registros: {total_registros:,}")
+        self.perf_media_label.setText(f"⏱️ Tempo Médio: {tempo_medio:.1f}s")
+        self.perf_usuarios_label.setText(f"👥 Usuários Ativos: {usuarios_unicos}")
+        
+        # Colore indicadores baseado em thresholds
+        if tempo_medio > 30:  # Mais de 30 segundos é preocupante
+            self.perf_media_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e74c3c;
+                    color: white;
+                    border: 1px solid #c0392b;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+        elif tempo_medio > 15:  # Entre 15-30s é atenção
+            self.perf_media_label.setStyleSheet("""
+                QLabel {
+                    background-color: #f39c12;
+                    color: white;
+                    border: 1px solid #e67e22;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
+        else:  # Menos de 15s é bom
+            self.perf_media_label.setStyleSheet("""
+                QLabel {
+                    background-color: #27ae60;
+                    color: white;
+                    border: 1px solid #229954;
+                    border-radius: 5px;
+                    padding: 8px;
+                    margin: 2px;
+                    font-weight: bold;
+                }
+            """)
 
-        # 3) Gráfico 1 – média de duração de 'etapa_analise' por usuário
+        # 3) Popula árvore de métricas com estatísticas detalhadas
+        self.metrics_tree.clear()
+        
+        # Métricas por stage
+        if 'stage' in df.columns and 'duration_s' in df.columns:
+            stage_stats = df.groupby("stage").agg({
+                'duration_s': ['count', 'mean', 'std', 'min', 'max']
+            }).round(2)
+            
+            stage_parent = QTreeWidgetItem(self.metrics_tree, ["📊 Por Etapa", "", ""])
+            
+            for stage in stage_stats.index:
+                count = stage_stats.loc[stage, ('duration_s', 'count')]
+                mean_time = stage_stats.loc[stage, ('duration_s', 'mean')]
+                std_time = stage_stats.loc[stage, ('duration_s', 'std')]
+                
+                stage_item = QTreeWidgetItem(stage_parent, 
+                    [stage, f"{mean_time:.1f}s", f"Count: {count}, Std: {std_time:.1f}s"])
+        
+        # Métricas por usuário
+        if 'user' in df.columns and 'duration_s' in df.columns:
+            user_stats = df.groupby("user").agg({
+                'duration_s': ['count', 'mean', 'std']
+            }).round(2)
+            
+            user_parent = QTreeWidgetItem(self.metrics_tree, ["👤 Por Usuário", "", ""])
+            
+            for user in user_stats.index:
+                count = user_stats.loc[user, ('duration_s', 'count')]
+                mean_time = user_stats.loc[user, ('duration_s', 'mean')]
+                std_time = user_stats.loc[user, ('duration_s', 'std')]
+                
+                user_item = QTreeWidgetItem(user_parent, 
+                    [user, f"{mean_time:.1f}s", f"Atividades: {count}, Std: {std_time:.1f}s"])
+        
+        # Expande os itens principais
+        self.metrics_tree.expandAll()
+
+        # 4) Gráfico 1 – média de duração de 'etapa_analise' por usuário
         self.fig_user.clear()
         ax1 = self.fig_user.add_subplot(111)
-        df_et = df[df.stage=="etapa_analise"]
-        media_user = df_et.groupby("user")["duration_s"].mean().sort_values()
-        if not media_user.empty:
-            ax1.bar(media_user.index, media_user.values)
-            ax1.set_title("Média etapa_analise por usuário")
-            ax1.set_ylabel("segundos")
-            ax1.set_xticklabels(media_user.index, rotation=45, ha='right')
+        
+        if 'stage' in df.columns and 'user' in df.columns and 'duration_s' in df.columns:
+            df_et = df[df.stage == "etapa_analise"]
+            if not df_et.empty:
+                media_user = df_et.groupby("user")["duration_s"].mean().sort_values(ascending=True)
+                
+                if not media_user.empty:
+                    bars = ax1.barh(range(len(media_user)), media_user.values)
+                    ax1.set_yticks(range(len(media_user)))
+                    ax1.set_yticklabels(media_user.index)
+                    ax1.set_xlabel("Tempo (segundos)")
+                    ax1.set_title("Performance - Etapa Análise por Usuário", fontsize=12, fontweight='bold')
+                    
+                    # Colore barras baseado na performance
+                    for i, bar in enumerate(bars):
+                        if media_user.iloc[i] > 30:
+                            bar.set_color('#e74c3c')  # Vermelho para lento
+                        elif media_user.iloc[i] > 15:
+                            bar.set_color('#f39c12')  # Laranja para médio
+                        else:
+                            bar.set_color('#27ae60')  # Verde para rápido
+                    
+                    ax1.grid(True, alpha=0.3)
+                else:
+                    ax1.text(0.5, 0.5, 'Sem dados de etapa_analise', 
+                            ha='center', va='center', transform=ax1.transAxes)
+            else:
+                ax1.text(0.5, 0.5, 'Sem dados de etapa_analise', 
+                        ha='center', va='center', transform=ax1.transAxes)
+        else:
+            ax1.text(0.5, 0.5, 'Dados insuficientes', 
+                    ha='center', va='center', transform=ax1.transAxes)
+        
         self.fig_user.tight_layout()
         self.canvas_user.draw()
 
-        # 4) Gráfico 2 – média de duração de cada question_* por pergunta
+        # 5) Gráfico 2 – média de duração de cada question_* por pergunta
         self.fig_q.clear()
         ax2 = self.fig_q.add_subplot(111)
-        df_q = df[df.stage.str.startswith("question_")]
-        media_q = df_q.groupby("stage")["duration_s"].mean().sort_values()
-        if not media_q.empty:
-            ax2.bar(media_q.index, media_q.values)
-            ax2.set_title("Média por pergunta")
-            ax2.set_ylabel("segundos")
-            ax2.set_xticklabels(media_q.index, rotation=90, ha='right')
+        
+        if 'stage' in df.columns and 'duration_s' in df.columns:
+            df_q = df[df.stage.str.startswith("question_")]
+            if not df_q.empty:
+                media_q = df_q.groupby("stage")["duration_s"].mean().sort_values(ascending=False)
+                
+                if not media_q.empty:
+                    bars = ax2.bar(range(len(media_q)), media_q.values)
+                    ax2.set_xticks(range(len(media_q)))
+                    ax2.set_xticklabels([stage.replace('question_', 'Q') for stage in media_q.index], 
+                                       rotation=45, ha='right')
+                    ax2.set_ylabel("Tempo (segundos)")
+                    ax2.set_title("Performance por Pergunta", fontsize=12, fontweight='bold')
+                    
+                    # Colore barras baseado na performance
+                    for i, bar in enumerate(bars):
+                        if media_q.iloc[i] > 20:
+                            bar.set_color('#e74c3c')  # Vermelho para lento
+                        elif media_q.iloc[i] > 10:
+                            bar.set_color('#f39c12')  # Laranja para médio
+                        else:
+                            bar.set_color('#27ae60')  # Verde para rápido
+                    
+                    ax2.grid(True, alpha=0.3)
+                else:
+                    ax2.text(0.5, 0.5, 'Sem dados de perguntas', 
+                            ha='center', va='center', transform=ax2.transAxes)
+            else:
+                ax2.text(0.5, 0.5, 'Sem dados de perguntas', 
+                        ha='center', va='center', transform=ax2.transAxes)
+        else:
+            ax2.text(0.5, 0.5, 'Dados insuficientes', 
+                    ha='center', va='center', transform=ax2.transAxes)
+        
         self.fig_q.tight_layout()
+        self.canvas_q.draw()
+    
+    def _clear_metrics_displays(self):
+        """Limpa todas as visualizações de métricas."""
+        # Limpa indicadores
+        self.perf_total_label.setText("📊 Total Registros: 0")
+        self.perf_media_label.setText("⏱️ Tempo Médio: 0s")
+        self.perf_usuarios_label.setText("👥 Usuários Ativos: 0")
+        
+        # Limpa árvore
+        self.metrics_tree.clear()
+        
+        # Limpa gráficos
+        self.fig_user.clear()
+        self.fig_q.clear()
+        self.canvas_user.draw()
         self.canvas_q.draw()
     
     # Handlers de eventos
