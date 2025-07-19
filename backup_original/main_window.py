@@ -25,7 +25,6 @@ from app.ui.results_view import ResultsView
 from app.ui.flags_view import FlagsView
 from app.ui.notes_lock_view import NotesTreeView, NotesLockPanel
 from app.utils.logger import log_ui_action
-from app.core.analysis_session_manager import session_manager
 from app.utils.performance import PerformanceTracker
 from PyQt5.QtCore import Qt, pyqtSlot
 from datetime import datetime, timedelta
@@ -728,10 +727,6 @@ class MainWindow(QMainWindow):
             return
 
         nr_atividade = str(note.get("NR_ATIVIDADE", ""))
-        
-        # 🔥 CORREÇÃO: Garante sessão limpa para nova análise
-        session = session_manager.ensure_clean_session(nr_atividade, getpass.getuser())
-        
         metrics_manager.start_stage(nr_atividade, "etapa_analise")
         
         if not self.lock_manager.is_note_locked_by_me(nr_atividade):
@@ -769,22 +764,11 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Erro ao consultar UC: {e}")
         
-        # 🔥 CORREÇÃO: Força limpeza completa antes de carregar nova nota
-        self.analysis_form.force_clean_reset()
-        
         # 4) Atualiza o AnalysisForm com tudo
         self.analysis_form.set_note_data(note, uc_data)
         self.analysis_form.valores_site = valores_site
         self.analysis_form.set_downloads_folder(folder)
         self.analysis_form.populate_attachments(folder)
-        
-        # 🔥 Atualiza dados na sessão
-        session_manager.update_session_data(
-            note_data=note,
-            uc_data=uc_data,
-            valores_site=valores_site,
-            downloads_folder=folder
-        )
         
         # 5) Muda para a tab de análise e prepara para iniciar
         self.tabs.setCurrentIndex(1)

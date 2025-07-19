@@ -1,0 +1,39 @@
+# Aplicação de Análise de Notas Técnicas GD - Dependências
+# Versão: 2.0.0
+
+# Interface gráfica
+PyQt5>=5.15.0
+PyQt5-tools>=5.15.0
+
+# Análise de dados e performance
+pandas>=1.5.0
+numpy>=1.21.0
+pyarrow>=10.0.0  # Para arquivos Parquet
+
+# Banco de dados
+oracledb>=1.4.0
+hdbcli>=2.16.0  # SAP HANA
+
+# Automação web
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+requests>=2.28.0
+
+# Sistema e monitoramento
+psutil>=5.9.0
+watchdog>=3.0.0
+
+# Utilitários
+python-dotenv>=1.0.0
+colorama>=0.4.6
+tqdm>=4.64.0
+
+# Desenvolvimento e testes (opcional)
+pytest>=7.0.0
+pytest-qt>=4.2.0
+black>=22.0.0
+flake8>=5.0.0
+
+# Documentação (opcional)
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.2.0
