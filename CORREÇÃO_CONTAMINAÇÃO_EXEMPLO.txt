@@ -1,0 +1,31 @@
+# EXEMPLO DE USO DA CORREÇÃO
+
+# ANTES (com problema de contaminação):
+def _on_avancar_clicked(self):
+    note = self.tree_notas.get_selected_note()
+    self.analysis_form.set_note_data(note, uc_data)
+    # ❌ Dados da análise anterior ainda estão presentes!
+
+# DEPOIS (com correção):
+def _on_avancar_clicked(self):
+    note = self.tree_notas.get_selected_note()
+    nr_atividade = str(note.get("NR_ATIVIDADE", ""))
+    
+    # 🔥 Garante sessão limpa
+    session = session_manager.ensure_clean_session(nr_atividade, getpass.getuser())
+    
+    # 🔥 Força limpeza completa
+    self.analysis_form.force_clean_reset()
+    
+    # Agora carrega dados limpos
+    self.analysis_form.set_note_data(note, uc_data)
+    
+    # ✅ Garantia de que não há contaminação!
+
+# BENEFÍCIOS:
+# ✅ Cada análise inicia completamente limpa
+# ✅ Dados de análises anteriores são completamente removidos
+# ✅ Histórico de decisões é zerado
+# ✅ Flags são limpas
+# ✅ Interface é resetada
+# ✅ Logs de auditoria registram limpezas

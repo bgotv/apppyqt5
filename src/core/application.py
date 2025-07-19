@@ -11,6 +11,7 @@ import getpass
 
 from src.config.settings import AppSettings, DatabaseSettings
 from src.core.components import ComponentManager
+from src.core.analysis_session_manager import session_manager
 from src.core.decision_tree import DecisionTreeEngine
 from src.core.flags_manager import FlagsManager
 from src.core.note_manager import NoteManager
@@ -173,7 +174,7 @@ class GDAnalysisApp(QMainWindow):
     
     def start_analysis(self, note_id: str) -> bool:
         """
-        Inicia análise de uma nota técnica.
+        Inicia análise de uma nota técnica com sessão limpa.
         
         Args:
             note_id: ID da nota a ser analisada
@@ -183,10 +184,14 @@ class GDAnalysisApp(QMainWindow):
         """
         try:
             with performance_tracker.track(f"start_analysis_{note_id}") as tracker:
+                # 🔥 NOVA FUNCIONALIDADE: Garante sessão limpa
+                session = session_manager.ensure_clean_session(note_id, self.user_id)
+                
                 # Verifica se já existe análise ativa para esta nota
                 if note_id in self.active_analysis:
-                    logger.warning(f"Análise já ativa para nota {note_id}")
-                    return False
+                    logger.warning(f"Análise já ativa para nota {note_id} - limpando estado anterior")
+                    # Remove análise anterior para evitar contaminação
+                    del self.active_analysis[note_id]
                 
                 # Cria rastreador de etapas
                 stage_tracker = StageTracker(note_id, self.user_id)
@@ -199,30 +204,38 @@ class GDAnalysisApp(QMainWindow):
                 note_data = self.note_manager.load_note(note_id)
                 if not note_data:
                     logger.error(f"Não foi possível carregar nota {note_id}")
+                    session_manager.abort_current_session("note_load_failed")
                     return False
+                
+                # 🔥 Atualiza dados na sessão
+                session_manager.update_session_data(note_data=note_data)
                 
                 stage_tracker.end_stage("loading_note")
                 
                 # Registra início da análise
                 log_user_action("analysis_started", {
                     "note_id": note_id,
-                    "note_data_keys": list(note_data.keys()) if note_data else []
+                    "session_id": session.session_id,
+                    "note_data_keys": list(note_data.keys()) if note_data else [],
+                    "session_cleaned": True
                 }, note_id=note_id)
                 
                 tracker.add_detail("note_loaded", True)
                 tracker.add_detail("note_data_size", len(note_data) if note_data else 0)
+                tracker.add_detail("session_id", session.session_id)
                 
-                logger.info(f"Análise iniciada para nota {note_id}")
+                logger.info(f"Análise iniciada para nota {note_id} com sessão limpa {session.session_id}")
                 return True
                 
         except Exception as e:
             logger.error(f"Erro ao iniciar análise da nota {note_id}: {e}", exc_info=True)
+            session_manager.abort_current_session("error_during_start")
             self.error_handler.handle_error("analysis_start", e, {"note_id": note_id})
             return False
     
     def complete_analysis(self, note_id: str) -> bool:
         """
-        Completa análise de uma nota técnica.
+        Completa análise de uma nota técnica e limpa a sessão.
         
         Args:
             note_id: ID da nota analisada
@@ -245,12 +258,18 @@ class GDAnalysisApp(QMainWindow):
             # Exporta dados das etapas
             stages_data = stage_tracker.export_stages()
             
+            # 🔥 Completa a sessão no gerenciador
+            current_session = session_manager.get_current_session()
+            if current_session and current_session.note_id == note_id:
+                session_manager.complete_analysis()
+            
             # Remove da lista ativa
             del self.active_analysis[note_id]
             
             # Registra conclusão
             log_user_action("analysis_completed", {
                 "note_id": note_id,
+                "session_id": current_session.session_id if current_session else None,
                 "total_time": stages_data["total_time"],
                 "stage_count": stages_data["stage_count"],
                 "stages": list(stages_data["stages"].keys())
@@ -261,6 +280,7 @@ class GDAnalysisApp(QMainWindow):
             
         except Exception as e:
             logger.error(f"Erro ao completar análise da nota {note_id}: {e}", exc_info=True)
+            session_manager.abort_current_session("error_during_completion")
             self.error_handler.handle_error("analysis_complete", e, {"note_id": note_id})
             return False
     

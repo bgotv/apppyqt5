@@ -335,60 +335,6 @@ class AnalysisForm(QWidget):
             'cd_uc': self.note_data.get("CD_UC", "")
         })
     
-    def force_clean_reset(self):
-        """
-        🔥 CORREÇÃO: Força limpeza completa para prevenir contaminação.
-        Remove TODOS os dados de análises anteriores.
-        """
-        try:
-            # Limpa interface
-            self.txt_results.clear()
-            self.progress_bar.setValue(0)
-            self.lbl_status.setText("Iniciando nova análise...")
-            
-            # Limpa dados da nota anterior
-            self.note_data = {}
-            self.uc_data = {}
-            self.valores_site = {}
-            self.downloads_folder = ""
-            
-            # Limpa anexos
-            if hasattr(self, 'tree_attachments'):
-                self.tree_attachments.clear()
-            
-            # 🔥 FORÇA limpeza completa de flags e histórico
-            if hasattr(self, 'flags_manager') and self.flags_manager:
-                self.flags_manager.clear_all_flags()
-            
-            if hasattr(self, 'decision_tree') and self.decision_tree:
-                self.decision_tree.clear_history()
-                # Força reset completo da árvore
-                if hasattr(self.decision_tree, 'flags'):
-                    for key in self.decision_tree.flags:
-                        self.decision_tree.flags[key] = 0
-                if hasattr(self.decision_tree, 'history'):
-                    self.decision_tree.history.clear()
-                if hasattr(self.decision_tree, 'pendencias'):
-                    self.decision_tree.pendencias.clear()
-            
-            # Reset botões
-            self.btn_iniciar_analise.setEnabled(True)
-            self.btn_abrir_anexos.setEnabled(False)
-            
-            # Reset análise em progresso
-            self.analysis_in_progress = False
-            
-            log_action('analysis_form_force_reset', {
-                'timestamp': time.time(),
-                'reason': 'contamination_prevention'
-            })
-            
-            print("🧹 Limpeza forçada concluída - dados anteriores removidos")
-            
-        except Exception as e:
-            print(f"⚠️ Erro durante limpeza forçada: {e}")
-            # Mesmo com erro, continua para não bloquear o usuário
-    
     def _on_iniciar_analise_clicked(self):
         """Handler para botão Iniciar Análise."""
         if not self.note_data:
