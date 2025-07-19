@@ -310,6 +310,9 @@ class AnalysisForm(QWidget):
         self.note_data = note_data or {}
         self.uc_data = uc_data or {}
         
+        # Reseta completamente o estado da análise anterior
+        self._reset_analysis_state()
+        
         # Atualiza a interface com os dados da nota
         self.lbl_nr_atividade.setText(str(self.note_data.get("NR_ATIVIDADE", "")))
         self.lbl_cliente.setText(str(self.note_data.get("NM_CLIENTE", "")))
@@ -334,6 +337,40 @@ class AnalysisForm(QWidget):
             'nr_atividade': self.note_data.get("NR_ATIVIDADE", ""),
             'cd_uc': self.note_data.get("CD_UC", "")
         })
+    
+    def _reset_analysis_state(self):
+        """
+        Reseta completamente o estado da análise anterior para evitar 
+        confusão entre diferentes atividades.
+        """
+        # Reseta variáveis de dados do site
+        if hasattr(self, 'valores_site'):
+            delattr(self, 'valores_site')
+        
+        # Reseta pasta de downloads
+        self.downloads_folder = None
+        
+        # Reseta estado de análise
+        self.analysis_in_progress = False
+        
+        # Limpa lista de anexos
+        if hasattr(self, 'tree_attachments'):
+            self.tree_attachments.clear()
+        
+        # Limpa área inline de perguntas
+        if hasattr(self, 'inline_area') and self.inline_area.layout():
+            # Remove todos os widgets da área inline
+            layout = self.inline_area.layout()
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+        
+        # Limpa qualquer TreeView de variáveis se existir
+        if hasattr(self, 'treeView'):
+            self.treeView.setModel(None)
+        
+        log_action('analysis_state_reset')
     
     def _on_iniciar_analise_clicked(self):
         """Handler para botão Iniciar Análise."""
@@ -412,10 +449,19 @@ class AnalysisForm(QWidget):
     def atualizar_treeview_com_valores(self):
         model = QStandardItemModel()
         model.setHorizontalHeaderLabels(['Variável', 'Valor'])
-        for chave, valor in self.valores_site.items():
-            item_var   = QStandardItem(chave)
-            item_valor = QStandardItem(str(valor))
+        
+        # Verifica se valores_site existe antes de usá-lo
+        if hasattr(self, 'valores_site') and self.valores_site:
+            for chave, valor in self.valores_site.items():
+                item_var   = QStandardItem(chave)
+                item_valor = QStandardItem(str(valor))
+                model.appendRow([item_var, item_valor])
+        else:
+            # Adiciona uma linha informando que não há dados
+            item_var   = QStandardItem("Nenhum dado disponível")
+            item_valor = QStandardItem("Faça o download dos anexos primeiro")
             model.appendRow([item_var, item_valor])
+            
         self.treeView.setModel(model)
         self.treeView.expandAll()
     
